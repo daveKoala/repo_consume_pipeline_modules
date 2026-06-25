@@ -1,0 +1,14 @@
+inputSet:
+  name: Build_daveKoala_repo_consume_pipeline_modules_1782394589089-push-trigger-input-set
+  identifier: Build_daveKoala_repo_consume_pipeline_modules_1782394589089pushtriggerinputset
+  orgIdentifier: default
+  projectIdentifier: myfirst
+  pipeline:
+    identifier: Build_daveKoala_repo_consume_pipeline_modules_1782394589089
+    properties:
+      ci:
+        codebase:
+          build:
+            type: branch
+            spec:
+              branch: <+trigger.branch>
