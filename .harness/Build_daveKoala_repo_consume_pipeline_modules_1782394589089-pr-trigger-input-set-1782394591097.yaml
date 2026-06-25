@@ -1,0 +1,14 @@
+inputSet:
+  name: Build_daveKoala_repo_consume_pipeline_modules_1782394589089-pr-trigger-input-set
+  identifier: Build_daveKoala_repo_consume_pipeline_modules_1782394589089prtriggerinputset
+  orgIdentifier: default
+  projectIdentifier: myfirst
+  pipeline:
+    identifier: Build_daveKoala_repo_consume_pipeline_modules_1782394589089
+    properties:
+      ci:
+        codebase:
+          build:
+            type: PR
+            spec:
+              number: <+trigger.prNumber>
