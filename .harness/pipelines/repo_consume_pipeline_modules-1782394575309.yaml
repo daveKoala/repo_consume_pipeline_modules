@@ -38,6 +38,24 @@ pipeline:
                     shell: Sh
                     command: echo "Pre Build step"
                   description: pre build
+              - step:
+                  type: Run
+                  name: Run_2
+                  identifier: Run_2
+                  spec:
+                    shell: Sh
+                    command: |-
+                      echo "Build ID: <+pipeline.sequenceId>"
+                      echo "Execution ID: <+pipeline.executionId>"
+
+                      echo "Repo: <+codebase.repoName>"
+                      echo "Branch: <+codebase.branch>"
+                      echo "Commit SHA: <+codebase.commitSha>"
+                      echo "Commit Message: <+codebase.commitMessage>"
+                      echo "Author: <+codebase.commitAuthor>"
+
+                      echo "Triggered by: <+trigger.triggeredBy.name>"
+                  description: build id
     - stage:
         identifier: build
         name: build
