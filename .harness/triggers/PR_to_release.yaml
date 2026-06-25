@@ -1,0 +1,29 @@
+trigger:
+  name: PR to release branches
+  identifier: PR_to_release
+  enabled: true
+  description: Run pipeline on PRs targeting release/* branches.
+  orgIdentifier: default
+  projectIdentifier: myfirst
+  pipelineIdentifier: Build_daveKoala_repo_consume_pipeline_modules_1782394589089
+  source:
+    type: Webhook
+    spec:
+      type: Github
+      spec:
+        type: PullRequest
+        spec:
+          connectorRef: account.Github
+          autoAbortPreviousExecutions: true
+          payloadConditions:
+            - key: targetBranch
+              operator: Regex
+              value: ^release/.*$
+          headerConditions: []
+          repoName: daveKoala/repo_consume_pipeline_modules
+          actions:
+            - Open
+            - Reopen
+            - Synchronize
+  inputSetRefs:
+    - Build_daveKoala_repo_consume_pipeline_modules_1782394589089prtriggerinputset

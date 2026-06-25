@@ -10,10 +10,13 @@ pipeline:
         connectorRef: account.Github
         repoName: daveKoala/repo_consume_pipeline_modules
   stages:
+    # =========================================================
+    # STAGE 1: PRE-BUILD  -> tests + validation (BLOCKING)
+    # =========================================================
     - stage:
         name: pre-build
         identifier: prebuild
-        description: ""
+        description: Pre build tests and validation. All steps blocking.
         type: CI
         spec:
           cloneCodebase: true
@@ -32,67 +35,199 @@ pipeline:
             steps:
               - step:
                   type: Run
-                  name: Run_1
-                  identifier: Run_1
-                  spec:
-                    shell: Sh
-                    command: echo "Pre Build step"
-                  description: pre build
-              - step:
-                  type: Run
-                  name: Run_2
-                  identifier: Run_2
+                  name: Context
+                  identifier: Context
+                  description: Print build + codebase context
                   spec:
                     shell: Sh
                     command: |-
                       echo "Build ID: <+pipeline.sequenceId>"
                       echo "Execution ID: <+pipeline.executionId>"
-
                       echo "Repo: <+codebase.repoName>"
                       echo "Branch: <+codebase.branch>"
                       echo "Commit SHA: <+codebase.commitSha>"
-                      echo "Commit Message: <+codebase.commitMessage>"
-                      echo "Author: <+codebase.commitAuthor>"
-
                       echo "Triggered by: <+trigger.triggeredBy.name>"
-                  description: build id
-    - stage:
-        identifier: build
-        name: build
-        spec:
-          caching:
-            enabled: true
-          cloneCodebase: true
-          execution:
-            steps:
               - parallel:
                   - step:
-                      identifier: echo
-                      name: echo
-                      spec:
-                        command: echo hello world
-                      timeout: ""
                       type: Run
-                  - step:
-                      type: Run
-                      name: Run_2
-                      identifier: Run_2
+                      name: Lint
+                      identifier: Lint
+                      description: Static analysis / lint (blocking)
                       spec:
                         shell: Sh
-                        command: echo "Yoooo Hooooo"
-                      description: yooo hoo
+                        command: echo "pre-build - lint"
+                  - step:
+                      type: Run
+                      name: Unit_Tests
+                      identifier: Unit_Tests
+                      description: Unit tests (blocking)
+                      spec:
+                        shell: Sh
+                        command: echo "pre-build - unit tests"
               - step:
                   type: Run
-                  name: Run_3
-                  identifier: Run_3
+                  name: Validate_Config
+                  identifier: Validate_Config
+                  description: Config / schema validation (blocking)
                   spec:
                     shell: Sh
-                    command: echo "Another step"
-                  description: another-step
-          platform:
-            arch: Amd64
-            os: Linux
-          runtime:
-            spec: {}
-            type: Cloud
+                    command: echo "pre-build - validate config + manifests"
+    # =========================================================
+    # STAGE 2: BUILD  -> build + artefact creation (BLOCKING)
+    # =========================================================
+    - stage:
+        name: build
+        identifier: build
+        description: Build and artefact creation. Blocking.
         type: CI
+        spec:
+          cloneCodebase: true
+          caching:
+            enabled: true
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Build
+                  identifier: Build
+                  description: Compile / build application
+                  spec:
+                    shell: Sh
+                    command: echo "build - compile application"
+              - step:
+                  type: Run
+                  name: Create_Artefact
+                  identifier: Create_Artefact
+                  description: Package + publish artefact
+                  spec:
+                    shell: Sh
+                    command: |-
+                      echo "build - create artefact"
+                      echo "build - artefact version <+pipeline.sequenceId>"
+    # =========================================================
+    # STAGE 3: DEPLOY  -> non-production (BLOCKING)
+    # =========================================================
+    - stage:
+        name: deploy
+        identifier: deploy
+        description: Deploy to non-production environment. Blocking.
+        type: CI
+        spec:
+          cloneCodebase: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Deploy_NonProd
+                  identifier: Deploy_NonProd
+                  description: Deploy artefact to non-prod
+                  spec:
+                    shell: Sh
+                    command: |-
+                      echo "deploy - deploy artefact <+pipeline.sequenceId> to non-prod"
+                      echo "deploy - target env = non-prod"
+    # =========================================================
+    # STAGE 4: POST-DEPLOY  -> verification
+    #   blocking : version / health / migration / API / mutation
+    #   advisory : fuzzing / perf smoke  (failure ignored)
+    # =========================================================
+    - stage:
+        name: post-deploy
+        identifier: postdeploy
+        description: >-
+          Post deploy verification. Core checks are blocking. Advisory checks
+          (fuzz, perf) are non-blocking via Ignore failure strategy.
+        type: CI
+        spec:
+          cloneCodebase: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              # ---- BLOCKING verification ----
+              - step:
+                  type: Run
+                  name: Version_Verify
+                  identifier: Version_Verify
+                  description: Verify deployed build/version (blocking)
+                  spec:
+                    shell: Sh
+                    command: echo "post-deploy - verify version == <+pipeline.sequenceId>"
+              - step:
+                  type: Run
+                  name: Health_Readiness
+                  identifier: Health_Readiness
+                  description: Health + readiness checks (blocking)
+                  spec:
+                    shell: Sh
+                    command: echo "post-deploy - health + readiness checks"
+              - step:
+                  type: Run
+                  name: Migration_Status
+                  identifier: Migration_Status
+                  description: Migration status check (blocking)
+                  spec:
+                    shell: Sh
+                    command: echo "post-deploy - migration status check"
+              - step:
+                  type: Run
+                  name: API_Validation_ReadOnly
+                  identifier: API_Validation_ReadOnly
+                  description: Non-destructive API validation (blocking)
+                  spec:
+                    shell: Sh
+                    command: echo "post-deploy - non-destructive API validation"
+              - step:
+                  type: Run
+                  name: Controlled_Mutation
+                  identifier: Controlled_Mutation
+                  description: Controlled mutation validation in non-prod (blocking)
+                  spec:
+                    shell: Sh
+                    command: echo "post-deploy - controlled mutation validation (non-prod)"
+              # ---- ADVISORY (non-blocking) ----
+              - parallel:
+                  - step:
+                      type: Run
+                      name: OpenAPI_Fuzz
+                      identifier: OpenAPI_Fuzz
+                      description: ADVISORY - OpenAPI fuzzing. Failure ignored.
+                      spec:
+                        shell: Sh
+                        command: echo "post-deploy - ADVISORY OpenAPI fuzzing"
+                      failureStrategies:
+                        - onFailure:
+                            errors:
+                              - AllErrors
+                            action:
+                              type: Ignore
+                  - step:
+                      type: Run
+                      name: Perf_Smoke
+                      identifier: Perf_Smoke
+                      description: ADVISORY - performance smoke test. Failure ignored.
+                      spec:
+                        shell: Sh
+                        command: echo "post-deploy - ADVISORY performance smoke test"
+                      failureStrategies:
+                        - onFailure:
+                            errors:
+                              - AllErrors
+                            action:
+                              type: Ignore
