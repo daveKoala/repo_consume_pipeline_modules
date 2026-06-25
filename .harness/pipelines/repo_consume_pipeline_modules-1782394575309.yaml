@@ -11,6 +11,34 @@ pipeline:
         repoName: daveKoala/repo_consume_pipeline_modules
   stages:
     - stage:
+        name: pre-build
+        identifier: prebuild
+        description: ""
+        type: CI
+        spec:
+          cloneCodebase: true
+          caching:
+            enabled: true
+            override: true
+          buildIntelligence:
+            enabled: true
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Run_1
+                  identifier: Run_1
+                  spec:
+                    shell: Sh
+                    command: echo "Pre Build step"
+                  description: pre build
+    - stage:
         identifier: build
         name: build
         spec:
@@ -19,13 +47,30 @@ pipeline:
           cloneCodebase: true
           execution:
             steps:
+              - parallel:
+                  - step:
+                      identifier: echo
+                      name: echo
+                      spec:
+                        command: echo hello world
+                      timeout: ""
+                      type: Run
+                  - step:
+                      type: Run
+                      name: Run_2
+                      identifier: Run_2
+                      spec:
+                        shell: Sh
+                        command: echo "Yoooo Hooooo"
+                      description: yooo hoo
               - step:
-                  identifier: echo
-                  name: echo
-                  spec:
-                    command: echo hello world
-                  timeout: ""
                   type: Run
+                  name: Run_3
+                  identifier: Run_3
+                  spec:
+                    shell: Sh
+                    command: echo "Another step"
+                  description: another-step
           platform:
             arch: Amd64
             os: Linux
