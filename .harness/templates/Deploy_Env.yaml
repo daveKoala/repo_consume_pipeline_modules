@@ -1,0 +1,103 @@
+template:
+  name: Deploy Env
+  identifier: Deploy_Env
+  versionLabel: v1
+  type: Stage
+  orgIdentifier: default
+  projectIdentifier: myfirst
+  tags: {}
+  spec:
+    type: CI
+    # Branch condition is supplied per-use (feature/** vs release/**).
+    when:
+      pipelineStatus: Success
+      condition: <+input>
+    # Per-use inputs.
+    variables:
+      - name: envName
+        type: String
+        description: Target environment label (DEV / TEST / UAT / LIVE)
+        value: <+input>
+      - name: runAdvisory
+        type: String
+        description: Run advisory checks (fuzz / perf)? true | false
+        value: <+input>.default(false).allowedValues(true,false)
+    spec:
+      cloneCodebase: false
+      platform:
+        os: Linux
+        arch: Amd64
+      runtime:
+        type: Cloud
+        spec: {}
+      execution:
+        steps:
+          # ---- deploy (placeholder script) ----
+          - step:
+              type: Run
+              name: Deploy
+              identifier: Deploy
+              description: Deploy artefact to <+stage.variables.envName>
+              spec:
+                shell: Sh
+                command: |-
+                  echo "===== DEPLOY -> <+stage.variables.envName> ====="
+                  echo "Build ID:    <+pipeline.sequenceId>"
+                  echo "Execution:   <+pipeline.executionId>"
+                  echo "Branch:      <+codebase.branch>"
+                  echo "Commit SHA:  <+codebase.commitSha>"
+                  # TODO: replace with real deploy command
+          # ---- verify (placeholder script) ----
+          - step:
+              type: Run
+              name: Verify
+              identifier: Verify
+              description: Read artefact + verify <+stage.variables.envName>
+              spec:
+                shell: Sh
+                command: |-
+                  echo "<+pipeline.stages.Build.spec.execution.steps.Create_Artefact.output.outputVariables.BUILD_INFO_B64>" | base64 -d > build-info.txt
+                  cat build-info.txt
+                  echo "<+stage.variables.envName> - verify version == <+pipeline.sequenceId>"
+                  echo "<+stage.variables.envName> - health + readiness OK"
+                  # TODO: replace with real verification commands
+          # ---- advisory (only when runAdvisory == true) ----
+          - parallel:
+              - step:
+                  type: Run
+                  name: OpenAPI Fuzz
+                  identifier: OpenAPI_Fuzz
+                  description: ADVISORY - OpenAPI fuzzing. Non-blocking.
+                  when:
+                    stageStatus: Success
+                    condition: <+stage.variables.runAdvisory> == "true"
+                  spec:
+                    shell: Sh
+                    command: |-
+                      echo "<+stage.variables.envName> - ADVISORY OpenAPI fuzzing"
+                      # TODO: replace with real fuzz command
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - AllErrors
+                        action:
+                          type: Ignore
+              - step:
+                  type: Run
+                  name: Perf Smoke
+                  identifier: Perf_Smoke
+                  description: ADVISORY - performance smoke test. Non-blocking.
+                  when:
+                    stageStatus: Success
+                    condition: <+stage.variables.runAdvisory> == "true"
+                  spec:
+                    shell: Sh
+                    command: |-
+                      echo "<+stage.variables.envName> - ADVISORY performance smoke test"
+                      # TODO: replace with real perf command
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - AllErrors
+                        action:
+                          type: Ignore

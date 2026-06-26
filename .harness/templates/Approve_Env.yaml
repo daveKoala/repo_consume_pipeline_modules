@@ -1,0 +1,39 @@
+template:
+  name: Approve Env
+  identifier: Approve_Env
+  versionLabel: v1
+  type: Stage
+  orgIdentifier: default
+  projectIdentifier: myfirst
+  tags: {}
+  spec:
+    type: Approval
+    # Branch condition supplied per-use.
+    when:
+      pipelineStatus: Success
+      condition: <+input>
+    variables:
+      - name: targetEnv
+        type: String
+        description: Environment this gate promotes to (UAT / LIVE)
+        value: <+input>
+    spec:
+      execution:
+        steps:
+          - step:
+              type: HarnessApproval
+              name: Approve
+              identifier: Approve
+              timeout: 1d
+              spec:
+                approvalMessage: |-
+                  Approve promotion of build <+pipeline.sequenceId>
+                  (SHA <+codebase.commitSha>) to <+stage.variables.targetEnv>.
+                includePipelineExecutionHistory: true
+                isAutoRejectEnabled: false
+                approvers:
+                  userGroups:
+                    - account._account_all_users
+                  minimumCount: 1
+                  disallowPipelineExecutor: false
+                approverInputs: []

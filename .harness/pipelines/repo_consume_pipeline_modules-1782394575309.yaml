@@ -9,13 +9,31 @@ pipeline:
         build: <+input>
         connectorRef: account.Github
         repoName: daveKoala/repo_consume_pipeline_modules
+  # ---------------------------------------------------------
+  # Risk-appetite toggles for 3rd-party tools.
+  # Each is set per run (default advisory). Values:
+  #   off      = skip the step entirely (e.g. vendor outage / unpaid bill)
+  #   advisory = run it, but a failure does NOT block the pipeline
+  #   blocking = run it, a failure blocks the pipeline
+  # ---------------------------------------------------------
+  variables:
+    - name: sonarqube_mode
+      type: String
+      description: SonarQube risk mode - off | advisory | blocking
+      required: false
+      value: <+input>.default(advisory).allowedValues(off,advisory,blocking)
+    - name: phpstan_mode
+      type: String
+      description: PHPStan risk mode - off | advisory | blocking
+      required: false
+      value: <+input>.default(advisory).allowedValues(off,advisory,blocking)
   stages:
     # =========================================================
     # STAGE 1: PRE-BUILD  -> tests + validation (BLOCKING)
     # =========================================================
     - stage:
-        name: pre-build
-        identifier: prebuild
+        name: Pre-build
+        identifier: PreBuild
         description: Pre build tests and validation. All steps blocking.
         type: CI
         spec:
@@ -35,8 +53,8 @@ pipeline:
             steps:
               - step:
                   type: Run
-                  name: Context
-                  identifier: Context
+                  name: Print Context
+                  identifier: Print_Context
                   description: Print build + codebase context
                   spec:
                     shell: Sh
@@ -50,34 +68,83 @@ pipeline:
               - parallel:
                   - step:
                       type: Run
-                      name: Lint
-                      identifier: Lint
+                      name: Run Lint
+                      identifier: Run_Lint
                       description: Static analysis / lint (blocking)
                       spec:
                         shell: Sh
-                        command: echo "pre-build - lint"
+                        command: |-
+                          echo "pre-build - lint"
+                          # TODO: replace with real lint command
                   - step:
                       type: Run
-                      name: Unit_Tests
-                      identifier: Unit_Tests
+                      name: Run Unit Tests
+                      identifier: Run_UnitTests
                       description: Unit tests (blocking)
                       spec:
                         shell: Sh
-                        command: echo "pre-build - unit tests"
+                        command: |-
+                          echo "pre-build - unit tests"
+                          # TODO: replace with real unit test command
               - step:
                   type: Run
-                  name: Validate_Config
+                  name: Validate Config
                   identifier: Validate_Config
                   description: Config / schema validation (blocking)
                   spec:
                     shell: Sh
-                    command: echo "pre-build - validate config + manifests"
+                    command: |-
+                      echo "pre-build - validate config + manifests"
+                      # TODO: replace with real validation command
+              # ---- Quality & Security (3rd-party, toggleable) ----
+              # 'off' skips via the when-condition. 'advisory' vs 'blocking'
+              # is handled inside the script: advisory swallows a failure.
+              - parallel:
+                  - step:
+                      type: Run
+                      name: Scan SonarQube
+                      identifier: Scan_SonarQube
+                      description: SonarQube scan. Mode = sonarqube_mode.
+                      when:
+                        stageStatus: Success
+                        condition: <+pipeline.variables.sonarqube_mode> != "off"
+                      spec:
+                        shell: Sh
+                        command: |-
+                          MODE="<+pipeline.variables.sonarqube_mode>"
+                          echo "quality - SonarQube (mode=$MODE)"
+                          # simulated tool exit code; set to 1 to demo a failure
+                          TOOL_EXIT=0
+                          if [ "$TOOL_EXIT" -ne 0 ] && [ "$MODE" = "advisory" ]; then
+                            echo "SonarQube failed but mode=advisory -> not blocking"
+                            exit 0
+                          fi
+                          exit $TOOL_EXIT
+                  - step:
+                      type: Run
+                      name: Scan PHPStan
+                      identifier: Scan_PHPStan
+                      description: PHPStan static analysis. Mode = phpstan_mode.
+                      when:
+                        stageStatus: Success
+                        condition: <+pipeline.variables.phpstan_mode> != "off"
+                      spec:
+                        shell: Sh
+                        command: |-
+                          MODE="<+pipeline.variables.phpstan_mode>"
+                          echo "quality - PHPStan (mode=$MODE)"
+                          TOOL_EXIT=0
+                          if [ "$TOOL_EXIT" -ne 0 ] && [ "$MODE" = "advisory" ]; then
+                            echo "PHPStan failed but mode=advisory -> not blocking"
+                            exit 0
+                          fi
+                          exit $TOOL_EXIT
     # =========================================================
     # STAGE 2: BUILD  -> build + artefact creation (BLOCKING)
     # =========================================================
     - stage:
-        name: build
-        identifier: build
+        name: Build
+        identifier: Build
         description: Build and artefact creation. Blocking.
         type: CI
         spec:
@@ -94,12 +161,14 @@ pipeline:
             steps:
               - step:
                   type: Run
-                  name: Build
-                  identifier: Build
+                  name: Compile
+                  identifier: Compile
                   description: Compile / build application
                   spec:
                     shell: Sh
-                    command: echo "build - compile application"
+                    command: |-
+                      echo "build - compile application"
+                      # TODO: replace with real build command
               - step:
                   type: Run
                   name: Create_Artefact
@@ -139,276 +208,112 @@ pipeline:
     # =========================================================
     - stage:
         name: Deploy DEV
-        identifier: Deploy_DEV
-        description: Auto deploy to DEV from feature/** branches. No approval.
-        type: CI
-        when:
-          pipelineStatus: Success
-          condition: <+codebase.branch>.startsWith("feature/")
-        spec:
-          cloneCodebase: false
-          platform:
-            os: Linux
-            arch: Amd64
-          runtime:
-            type: Cloud
-            spec: {}
-          execution:
-            steps:
-              - step:
-                  type: Run
-                  name: Deploy_DEV
-                  identifier: Deploy_DEV_step
-                  description: Deploy to DEV + echo build context
-                  spec:
-                    shell: Sh
-                    command: |-
-                      echo "===== DEPLOY -> DEV ====="
-                      echo "Build ID:    <+pipeline.sequenceId>"
-                      echo "Execution:   <+pipeline.executionId>"
-                      echo "Branch:      <+codebase.branch>"
-                      echo "Commit SHA:  <+codebase.commitSha>"
-              - step:
-                  type: Run
-                  name: Verify_DEV
-                  identifier: Verify_DEV
-                  description: Read artefact + verify (version/health)
-                  spec:
-                    shell: Sh
-                    command: |-
-                      echo "<+pipeline.stages.build.spec.execution.steps.Create_Artefact.output.outputVariables.BUILD_INFO_B64>" | base64 -d > build-info.txt
-                      cat build-info.txt
-                      echo "DEV - verify version == <+pipeline.sequenceId>"
-                      echo "DEV - health + readiness OK"
+        identifier: DeployDev
+        template:
+          templateRef: Deploy_Env
+          versionLabel: v1
+          templateInputs:
+            type: CI
+            when:
+              condition: <+codebase.branch>.startsWith("feature/")
+            variables:
+              - name: envName
+                type: String
+                value: DEV
+              - name: runAdvisory
+                type: String
+                value: "false"
     # =========================================================
     # DEPLOY -> TEST  (release/**)  AUTO on push/create/PR
     # =========================================================
     - stage:
         name: Deploy TEST
-        identifier: Deploy_TEST
-        description: Auto deploy to TEST from release/** branches.
-        type: CI
-        when:
-          pipelineStatus: Success
-          condition: <+codebase.branch>.startsWith("release/") || <+codebase.targetBranch>.startsWith("release/")
-        spec:
-          cloneCodebase: false
-          platform:
-            os: Linux
-            arch: Amd64
-          runtime:
-            type: Cloud
-            spec: {}
-          execution:
-            steps:
-              - step:
-                  type: Run
-                  name: Deploy_TEST
-                  identifier: Deploy_TEST_step
-                  description: Deploy to TEST + echo build context
-                  spec:
-                    shell: Sh
-                    command: |-
-                      echo "===== DEPLOY -> TEST ====="
-                      echo "Build ID:    <+pipeline.sequenceId>"
-                      echo "Execution:   <+pipeline.executionId>"
-                      echo "Branch:      <+codebase.branch>"
-                      echo "Commit SHA:  <+codebase.commitSha>"
-              - step:
-                  type: Run
-                  name: Verify_TEST
-                  identifier: Verify_TEST
-                  description: Read artefact + blocking verification
-                  spec:
-                    shell: Sh
-                    command: |-
-                      echo "<+pipeline.stages.build.spec.execution.steps.Create_Artefact.output.outputVariables.BUILD_INFO_B64>" | base64 -d > build-info.txt
-                      cat build-info.txt
-                      echo "TEST - verify version == <+pipeline.sequenceId>"
-                      echo "TEST - health + readiness OK"
-                      echo "TEST - migration status OK"
-                      echo "TEST - non-destructive API validation OK"
-              # ---- ADVISORY (non-blocking) ----
-              - parallel:
-                  - step:
-                      type: Run
-                      name: OpenAPI_Fuzz
-                      identifier: OpenAPI_Fuzz
-                      description: ADVISORY - OpenAPI fuzzing. Failure ignored.
-                      spec:
-                        shell: Sh
-                        command: echo "TEST - ADVISORY OpenAPI fuzzing"
-                      failureStrategies:
-                        - onFailure:
-                            errors:
-                              - AllErrors
-                            action:
-                              type: Ignore
-                  - step:
-                      type: Run
-                      name: Perf_Smoke
-                      identifier: Perf_Smoke
-                      description: ADVISORY - performance smoke test. Failure ignored.
-                      spec:
-                        shell: Sh
-                        command: echo "TEST - ADVISORY performance smoke test"
-                      failureStrategies:
-                        - onFailure:
-                            errors:
-                              - AllErrors
-                            action:
-                              type: Ignore
+        identifier: DeployTest
+        template:
+          templateRef: Deploy_Env
+          versionLabel: v1
+          templateInputs:
+            type: CI
+            when:
+              condition: <+codebase.branch>.startsWith("release/") || <+codebase.targetBranch>.startsWith("release/")
+            variables:
+              - name: envName
+                type: String
+                value: TEST
+              - name: runAdvisory
+                type: String
+                value: "true"
     # =========================================================
     # MANUAL GATE -> approve promotion to UAT  (release/**)
     # =========================================================
     - stage:
         name: Approve UAT
-        identifier: Approve_UAT
-        description: Manual approval gate before UAT.
-        type: Approval
-        when:
-          pipelineStatus: Success
-          condition: <+codebase.branch>.startsWith("release/") || <+codebase.targetBranch>.startsWith("release/")
-        spec:
-          execution:
-            steps:
-              - step:
-                  type: HarnessApproval
-                  name: Approve UAT
-                  identifier: Approve_UAT_step
-                  timeout: 1d
-                  spec:
-                    approvalMessage: |-
-                      Approve promotion of build <+pipeline.sequenceId>
-                      (SHA <+codebase.commitSha>) to UAT.
-                    includePipelineExecutionHistory: true
-                    isAutoRejectEnabled: false
-                    approvers:
-                      userGroups:
-                        - account._account_all_users
-                      minimumCount: 1
-                      disallowPipelineExecutor: false
-                    approverInputs: []
+        identifier: ApproveUat
+        template:
+          templateRef: Approve_Env
+          versionLabel: v1
+          templateInputs:
+            type: Approval
+            when:
+              condition: <+codebase.branch>.startsWith("release/") || <+codebase.targetBranch>.startsWith("release/")
+            variables:
+              - name: targetEnv
+                type: String
+                value: UAT
     # =========================================================
     # DEPLOY -> UAT  (release/**)  after approval
     # =========================================================
     - stage:
         name: Deploy UAT
-        identifier: Deploy_UAT
-        description: Deploy to UAT after manual approval.
-        type: CI
-        when:
-          pipelineStatus: Success
-          condition: <+codebase.branch>.startsWith("release/") || <+codebase.targetBranch>.startsWith("release/")
-        spec:
-          cloneCodebase: false
-          platform:
-            os: Linux
-            arch: Amd64
-          runtime:
-            type: Cloud
-            spec: {}
-          execution:
-            steps:
-              - step:
-                  type: Run
-                  name: Deploy_UAT
-                  identifier: Deploy_UAT_step
-                  description: Deploy to UAT + echo build context
-                  spec:
-                    shell: Sh
-                    command: |-
-                      echo "===== DEPLOY -> UAT ====="
-                      echo "Build ID:    <+pipeline.sequenceId>"
-                      echo "Execution:   <+pipeline.executionId>"
-                      echo "Branch:      <+codebase.branch>"
-                      echo "Commit SHA:  <+codebase.commitSha>"
-              - step:
-                  type: Run
-                  name: Verify_UAT
-                  identifier: Verify_UAT
-                  description: Read artefact + verify
-                  spec:
-                    shell: Sh
-                    command: |-
-                      echo "<+pipeline.stages.build.spec.execution.steps.Create_Artefact.output.outputVariables.BUILD_INFO_B64>" | base64 -d > build-info.txt
-                      cat build-info.txt
-                      echo "UAT - verify version == <+pipeline.sequenceId>"
-                      echo "UAT - health + readiness OK"
+        identifier: DeployUat
+        template:
+          templateRef: Deploy_Env
+          versionLabel: v1
+          templateInputs:
+            type: CI
+            when:
+              condition: <+codebase.branch>.startsWith("release/") || <+codebase.targetBranch>.startsWith("release/")
+            variables:
+              - name: envName
+                type: String
+                value: UAT
+              - name: runAdvisory
+                type: String
+                value: "false"
     # =========================================================
     # MANUAL GATE -> approve promotion to LIVE  (release/**)
     # =========================================================
     - stage:
         name: Approve LIVE
-        identifier: Approve_LIVE
-        description: Manual approval gate before LIVE / production.
-        type: Approval
-        when:
-          pipelineStatus: Success
-          condition: <+codebase.branch>.startsWith("release/") || <+codebase.targetBranch>.startsWith("release/")
-        spec:
-          execution:
-            steps:
-              - step:
-                  type: HarnessApproval
-                  name: Approve LIVE
-                  identifier: Approve_LIVE_step
-                  timeout: 1d
-                  spec:
-                    approvalMessage: |-
-                      Approve promotion of build <+pipeline.sequenceId>
-                      (SHA <+codebase.commitSha>) to LIVE / production.
-                    includePipelineExecutionHistory: true
-                    isAutoRejectEnabled: false
-                    approvers:
-                      userGroups:
-                        - account._account_all_users
-                      minimumCount: 1
-                      disallowPipelineExecutor: false
-                    approverInputs: []
+        identifier: ApproveLive
+        template:
+          templateRef: Approve_Env
+          versionLabel: v1
+          templateInputs:
+            type: Approval
+            when:
+              condition: <+codebase.branch>.startsWith("release/") || <+codebase.targetBranch>.startsWith("release/")
+            variables:
+              - name: targetEnv
+                type: String
+                value: LIVE
     # =========================================================
     # DEPLOY -> LIVE  (release/**)  after approval
     # =========================================================
     - stage:
         name: Deploy LIVE
-        identifier: Deploy_LIVE
-        description: Deploy to LIVE / production after manual approval.
-        type: CI
-        when:
-          pipelineStatus: Success
-          condition: <+codebase.branch>.startsWith("release/") || <+codebase.targetBranch>.startsWith("release/")
-        spec:
-          cloneCodebase: false
-          platform:
-            os: Linux
-            arch: Amd64
-          runtime:
-            type: Cloud
-            spec: {}
-          execution:
-            steps:
-              - step:
-                  type: Run
-                  name: Deploy_LIVE
-                  identifier: Deploy_LIVE_step
-                  description: Deploy to LIVE + echo build context
-                  spec:
-                    shell: Sh
-                    command: |-
-                      echo "===== DEPLOY -> LIVE ====="
-                      echo "Build ID:    <+pipeline.sequenceId>"
-                      echo "Execution:   <+pipeline.executionId>"
-                      echo "Branch:      <+codebase.branch>"
-                      echo "Commit SHA:  <+codebase.commitSha>"
-              - step:
-                  type: Run
-                  name: Verify_LIVE
-                  identifier: Verify_LIVE
-                  description: Read artefact + verify
-                  spec:
-                    shell: Sh
-                    command: |-
-                      echo "<+pipeline.stages.build.spec.execution.steps.Create_Artefact.output.outputVariables.BUILD_INFO_B64>" | base64 -d > build-info.txt
-                      cat build-info.txt
-                      echo "LIVE - verify version == <+pipeline.sequenceId>"
-                      echo "LIVE - health + readiness OK"
+        identifier: DeployLive
+        template:
+          templateRef: Deploy_Env
+          versionLabel: v1
+          templateInputs:
+            type: CI
+            when:
+              condition: <+codebase.branch>.startsWith("release/") || <+codebase.targetBranch>.startsWith("release/")
+            variables:
+              - name: envName
+                type: String
+                value: LIVE
+              - name: runAdvisory
+                type: String
+                value: "false"

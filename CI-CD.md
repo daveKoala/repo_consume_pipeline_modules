@@ -35,13 +35,33 @@ As this is a demo the indiviual steps can just be `echo "<step name>"`
 
 
 
-Quality and secuirty
+## Quality and secuirty
 
-There are 3rd prty tools like Sonarqube, PHP stan, etc
+There are 3rd prty tools like Sonarqube, PHP stan, etc that we will use.
 
 What i need to concider is that these hostroically have caused us issues. E.g. someone did not pay a bill so the service kept failing.
 
 What i need is a way of turning on and off steps depending on our appitite for risk in these situations.
+
+### Risk-appetite toggles (implemented)
+
+Each 3rd-party tool has a pipeline variable set per run, with three modes:
+
+| Mode | Behaviour | Use when |
+|------|-----------|----------|
+| `off` | step is skipped entirely | vendor outage / unpaid bill — don't let it block delivery |
+| `advisory` | runs, but a failure does **not** block | want signal without risk to the pipeline |
+| `blocking` | runs, a failure **blocks** | high confidence in the tool, want it enforced |
+
+Variables: `sonarqube_mode`, `phpstan_mode` (default `advisory`). Add one per
+tool you onboard.
+
+- `off` is handled by a stage `when` condition (`<+pipeline.variables.X_mode> != "off"`) → step is skipped.
+- `advisory` vs `blocking` is decided inside the step: in advisory mode a tool
+  failure is swallowed (`exit 0`); in blocking mode the real exit code stands.
+
+So if SonarQube goes down (or the bill lapses), set `sonarqube_mode = off` for
+the run and the pipeline still ships.
 
 
 ## Environments & promotion (demo)
@@ -86,4 +106,18 @@ not match are skipped.
 
 Files:
 - Pipeline: `.harness/pipelines/repo_consume_pipeline_modules-1782394575309.yaml`
+- Templates: `.harness/templates/Deploy_Env.yaml` (deploy+verify+advisory), `Approve_Env.yaml` (manual gate)
 - Triggers: `.harness/triggers/Push_to_feature.yaml`, `Push_to_release.yaml`, `PR_to_release.yaml`
+
+### Reusable blocks
+
+The 4 deploy stages and 2 approval stages are one template each:
+
+| Template | Used by | Inputs |
+|----------|---------|--------|
+| `Deploy_Env` | DEV / TEST / UAT / LIVE | `envName`, `runAdvisory`, branch `when` |
+| `Approve_Env` | UAT / LIVE gates | `targetEnv`, branch `when` |
+
+Change the deploy or verify logic once in the template and every environment
+inherits it. All placeholder steps are `Run` scripts with a `# TODO` line ready
+for the real command.
