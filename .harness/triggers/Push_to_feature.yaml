@@ -1,0 +1,26 @@
+trigger:
+  name: Push to feature
+  identifier: Push_to_feature
+  enabled: true
+  description: Auto-run on push to feature/** branches (deploys to DEV).
+  orgIdentifier: default
+  projectIdentifier: myfirst
+  pipelineIdentifier: Build_daveKoala_repo_consume_pipeline_modules_1782394589089
+  source:
+    type: Webhook
+    spec:
+      type: Github
+      spec:
+        type: Push
+        spec:
+          connectorRef: account.Github
+          autoAbortPreviousExecutions: true
+          payloadConditions:
+            - key: targetBranch
+              operator: Regex
+              value: ^feature/.*$
+          headerConditions: []
+          repoName: daveKoala/repo_consume_pipeline_modules
+          actions: []
+  inputSetRefs:
+    - Build_daveKoala_repo_consume_pipeline_modules_1782394589089pushtriggerinputset
