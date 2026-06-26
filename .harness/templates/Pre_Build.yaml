@@ -1,0 +1,112 @@
+template:
+  name: Pre Build
+  identifier: Pre_Build
+  versionLabel: v1
+  type: Stage
+  orgIdentifier: default
+  projectIdentifier: myfirst
+  tags: {}
+  spec:
+    type: CI
+    spec:
+      cloneCodebase: true
+      caching:
+        enabled: true
+        override: true
+      buildIntelligence:
+        enabled: true
+      platform:
+        os: Linux
+        arch: Amd64
+      runtime:
+        type: Cloud
+        spec: {}
+      execution:
+        steps:
+          - step:
+              type: Run
+              name: Print Context
+              identifier: Print_Context
+              description: Print build + codebase context
+              spec:
+                shell: Sh
+                command: |-
+                  echo "Build ID: <+pipeline.sequenceId>"
+                  echo "Execution ID: <+pipeline.executionId>"
+                  echo "Repo: <+codebase.repoName>"
+                  echo "Branch: <+codebase.branch>"
+                  echo "Commit SHA: <+codebase.commitSha>"
+                  echo "Triggered by: <+trigger.triggeredBy.name>"
+          - parallel:
+              - step:
+                  type: Run
+                  name: Run Lint
+                  identifier: Run_Lint
+                  description: Static analysis / lint (blocking)
+                  spec:
+                    shell: Sh
+                    command: |-
+                      echo "pre-build - lint"
+                      # TODO: replace with real lint command
+              - step:
+                  type: Run
+                  name: Run Unit Tests
+                  identifier: Run_UnitTests
+                  description: Unit tests (blocking)
+                  spec:
+                    shell: Sh
+                    command: |-
+                      echo "pre-build - unit tests"
+                      # TODO: replace with real unit test command
+          - step:
+              type: Run
+              name: Validate Config
+              identifier: Validate_Config
+              description: Config / schema validation (blocking)
+              spec:
+                shell: Sh
+                command: |-
+                  echo "pre-build - validate config + manifests"
+                  # TODO: replace with real validation command
+          # ---- Quality & Security (3rd-party, toggleable) ----
+          # Requires the consuming pipeline to declare sonarqube_mode +
+          # phpstan_mode variables. 'off' skips; 'advisory' swallows failure.
+          - parallel:
+              - step:
+                  type: Run
+                  name: Scan SonarQube
+                  identifier: Scan_SonarQube
+                  description: SonarQube scan. Mode = sonarqube_mode.
+                  when:
+                    stageStatus: Success
+                    condition: <+pipeline.variables.sonarqube_mode> != "off"
+                  spec:
+                    shell: Sh
+                    command: |-
+                      MODE="<+pipeline.variables.sonarqube_mode>"
+                      echo "quality - SonarQube (mode=$MODE)"
+                      TOOL_EXIT=0
+                      if [ "$TOOL_EXIT" -ne 0 ] && [ "$MODE" = "advisory" ]; then
+                        echo "SonarQube failed but mode=advisory -> not blocking"
+                        exit 0
+                      fi
+                      exit $TOOL_EXIT
+              - step:
+                  type: Run
+                  name: Scan PHPStan
+                  identifier: Scan_PHPStan
+                  description: PHPStan static analysis. Mode = phpstan_mode.
+                  when:
+                    stageStatus: Success
+                    condition: <+pipeline.variables.phpstan_mode> != "off"
+                  spec:
+                    shell: Sh
+                    command: |-
+                      MODE="<+pipeline.variables.phpstan_mode>"
+                      echo "quality - PHPStan (mode=$MODE)"
+                      TOOL_EXIT=0
+                      if [ "$TOOL_EXIT" -ne 0 ] && [ "$MODE" = "advisory" ]; then
+                        echo "PHPStan failed but mode=advisory -> not blocking"
+                        exit 0
+                      fi
+                      exit $TOOL_EXIT

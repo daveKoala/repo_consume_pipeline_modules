@@ -1,0 +1,62 @@
+template:
+  name: Build
+  identifier: Build_Stage
+  versionLabel: v1
+  type: Stage
+  orgIdentifier: default
+  projectIdentifier: myfirst
+  tags: {}
+  spec:
+    type: CI
+    spec:
+      cloneCodebase: true
+      caching:
+        enabled: true
+      platform:
+        os: Linux
+        arch: Amd64
+      runtime:
+        type: Cloud
+        spec: {}
+      execution:
+        steps:
+          - step:
+              type: Run
+              name: Compile
+              identifier: Compile
+              description: Compile / build application
+              spec:
+                shell: Sh
+                command: |-
+                  echo "build - compile application"
+                  # TODO: replace with real build command
+          - step:
+              type: Run
+              name: Create Artefact
+              identifier: Create_Artefact
+              description: >-
+                Create build-info.txt + export contents (base64) as an output
+                variable so later stages (separate machines) can read it.
+              spec:
+                shell: Sh
+                command: |-
+                  echo "build - create artefact"
+                  echo "build - artefact version <+pipeline.sequenceId>"
+
+                  cat > build-info.txt <<EOF
+                  Service:      repo_consume_pipeline_modules
+                  Build ID:     <+pipeline.sequenceId>
+                  Execution ID: <+pipeline.executionId>
+                  Repo:         <+codebase.repoName>
+                  Branch:       <+codebase.branch>
+                  Commit SHA:   <+codebase.commitSha>
+                  Built At:     $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+                  EOF
+
+                  echo "----- build-info.txt -----"
+                  cat build-info.txt
+                  echo "--------------------------"
+
+                  export BUILD_INFO_B64="$(base64 build-info.txt | tr -d '\n')"
+              outputVariables:
+                - name: BUILD_INFO_B64

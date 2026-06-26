@@ -5,7 +5,7 @@ trigger:
   description: Auto-run on push to feature/** branches (deploys to DEV).
   orgIdentifier: default
   projectIdentifier: myfirst
-  pipelineIdentifier: Build_daveKoala_repo_consume_pipeline_modules_1782394589089
+  pipelineIdentifier: Develop_daveKoala_repo_consume_pipeline_modules
   source:
     type: Webhook
     spec:
@@ -23,4 +23,4 @@ trigger:
           repoName: daveKoala/repo_consume_pipeline_modules
           actions: []
   inputSetRefs:
-    - Build_daveKoala_repo_consume_pipeline_modules_1782394589089pushtriggerinputset
+    - Develop_daveKoala_repo_consume_pipeline_modulespushtriggerinputset

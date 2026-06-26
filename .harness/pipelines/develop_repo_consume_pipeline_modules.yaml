@@ -1,0 +1,91 @@
+pipeline:
+  identifier: Develop_daveKoala_repo_consume_pipeline_modules
+  name: Develop repo_consume_pipeline_modules
+  orgIdentifier: default
+  projectIdentifier: myfirst
+  properties:
+    ci:
+      codebase:
+        build: <+input>
+        connectorRef: account.Github
+        repoName: daveKoala/repo_consume_pipeline_modules
+  # ---------------------------------------------------------
+  # DEVELOP pipeline (feature/** push).
+  # Flow: Pre-build -> Build (AUTO on merge to feature branch)
+  #       -> Approve DEV (manual "Deploy to DEV" gate)
+  #       -> Deploy DEV -> verify
+  # Dev pushes/merges -> tests + build run automatically.
+  # Nothing hits DEV until a human clicks approve.
+  # All stages are template refs (Pre_Build / Build / Approve_Env / Deploy_Env).
+  # ---------------------------------------------------------
+  # Risk-appetite toggles for 3rd-party tools (consumed by Pre_Build).
+  #   off | advisory | blocking
+  # ---------------------------------------------------------
+  variables:
+    - name: sonarqube_mode
+      type: String
+      description: SonarQube risk mode - off | advisory | blocking
+      required: false
+      value: <+input>.default(advisory).allowedValues(off,advisory,blocking)
+    - name: phpstan_mode
+      type: String
+      description: PHPStan risk mode - off | advisory | blocking
+      required: false
+      value: <+input>.default(advisory).allowedValues(off,advisory,blocking)
+  stages:
+    # =========================================================
+    # STAGE 1: PRE-BUILD  (template)
+    # =========================================================
+    - stage:
+        name: Pre-build
+        identifier: PreBuild
+        template:
+          templateRef: Pre_Build
+          versionLabel: v1
+    # =========================================================
+    # STAGE 2: BUILD  (template) -- identifier MUST be 'Build'
+    #   so Deploy_Env's Verify step can read the artefact output.
+    # =========================================================
+    - stage:
+        name: Build
+        identifier: Build
+        template:
+          templateRef: Build_Stage
+          versionLabel: v1
+    # =========================================================
+    # MANUAL GATE -> dev clicks "approve" before it hits DEV
+    # =========================================================
+    - stage:
+        name: Approve DEV
+        identifier: ApproveDev
+        template:
+          templateRef: Approve_Env
+          versionLabel: v1
+          templateInputs:
+            type: Approval
+            when:
+              condition: <+codebase.branch>.startsWith("feature/")
+            variables:
+              - name: targetEnv
+                type: String
+                value: DEV
+    # =========================================================
+    # DEPLOY -> DEV  after approval
+    # =========================================================
+    - stage:
+        name: Deploy DEV
+        identifier: DeployDev
+        template:
+          templateRef: Deploy_Env
+          versionLabel: v1
+          templateInputs:
+            type: CI
+            when:
+              condition: <+codebase.branch>.startsWith("feature/")
+            variables:
+              - name: envName
+                type: String
+                value: DEV
+              - name: runAdvisory
+                type: String
+                value: "false"
