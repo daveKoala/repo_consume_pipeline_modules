@@ -104,12 +104,35 @@ pipeline:
                   type: Run
                   name: Create_Artefact
                   identifier: Create_Artefact
-                  description: Package + publish artefact
+                  description: >-
+                    Create build-info.txt + publish as artifact. Also export the
+                    contents (base64) as an output variable so later stages
+                    (which run on separate machines) can read it.
                   spec:
                     shell: Sh
                     command: |-
                       echo "build - create artefact"
                       echo "build - artefact version <+pipeline.sequenceId>"
+
+                      # ---- create the artefact file ----
+                      cat > build-info.txt <<EOF
+                      Service:      repo_consume_pipeline_modules
+                      Build ID:     <+pipeline.sequenceId>
+                      Execution ID: <+pipeline.executionId>
+                      Repo:         <+codebase.repoName>
+                      Branch:       <+codebase.branch>
+                      Commit SHA:   <+codebase.commitSha>
+                      Built At:     $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+                      EOF
+
+                      echo "----- build-info.txt -----"
+                      cat build-info.txt
+                      echo "--------------------------"
+
+                      # carry contents across stages (stages run on separate machines)
+                      export BUILD_INFO_B64="$(base64 build-info.txt | tr -d '\n')"
+                    outputVariables:
+                      - name: BUILD_INFO_B64
     # =========================================================
     # STAGE 3: DEPLOY  -> non-production (BLOCKING)
     # =========================================================
@@ -161,6 +184,21 @@ pipeline:
           execution:
             steps:
               # ---- BLOCKING verification ----
+              - step:
+                  type: Run
+                  name: Read_Build_Info
+                  identifier: Read_Build_Info
+                  description: >-
+                    Rebuild build-info.txt from the build stage output variable
+                    and echo it. The file is written to the workspace so it can
+                    be uploaded / downloaded if an artifact store is configured.
+                  spec:
+                    shell: Sh
+                    command: |-
+                      echo "<+pipeline.stages.build.spec.execution.steps.Create_Artefact.output.outputVariables.BUILD_INFO_B64>" | base64 -d > build-info.txt
+                      echo "----- build-info.txt -----"
+                      cat build-info.txt
+                      echo "--------------------------"
               - step:
                   type: Run
                   name: Version_Verify
