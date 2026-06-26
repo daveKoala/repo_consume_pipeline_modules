@@ -151,3 +151,47 @@ for the real command.
 > Note: the **Build** stage must keep the identifier `Build` in each pipeline —
 > Deploy_Env's verify step reads the artefact via
 > `<+pipeline.stages.Build.spec.execution.steps.Create_Artefact.output...>`.
+
+## Git as source of truth (and the one gap)
+
+Everything in `.harness/` is version-controlled and is the source of truth.
+Most of it is **live-read by Harness from git** ("Git Experience") — edit the
+file, push, and the next run uses it:
+
+| Entity | Stored in git | Harness reads from git live? |
+|--------|---------------|------------------------------|
+| Pipelines | ✅ | ✅ yes |
+| Templates | ✅ | ✅ yes |
+| Input sets | ✅ | ✅ yes |
+| **Triggers** | ✅ (these files) | ❌ **no** — inline only |
+
+**Triggers are the GitOps gap.** In this Harness version triggers are stored in
+the Harness database, *not* read from git. The `.harness/triggers/*.yaml` files
+are still the canonical record (reviewable in PRs, reproducible, DR), but
+**editing the file alone changes nothing** — you must also apply it in the UI.
+
+### How to apply a trigger (recreate by pasting YAML)
+
+1. Open the owning pipeline → **Triggers** tab → **+ New Trigger** → GitHub / Webhook.
+2. Switch the editor **VISUAL → YAML** (toggle, top-right).
+3. Paste the contents of the matching `.harness/triggers/*.yaml` file.
+4. Save.
+
+Which trigger belongs to which pipeline:
+
+| Trigger file | Pipeline | Event |
+|--------------|----------|-------|
+| `Push_to_feature.yaml` | Develop | push to `feature/**` |
+| `Push_to_release.yaml` | Release | push to `release/**` |
+| `PR_to_release.yaml` | Release | PR to `release/**` |
+
+Key fields when pasting (already set in the files):
+- `pipelineIdentifier` — must match the owning pipeline.
+- `pipelineBranchName: main` — branch Harness loads the *pipeline definition*
+  from (not the branch being built; that comes from the input set).
+- `inputSetRefs` — the input set that maps the trigger to the codebase branch.
+
+> If your account later gets **Git Experience for Triggers** (version-gated) or
+> you adopt the **Terraform Harness provider** (`harness_platform_triggers`),
+> triggers become true GitOps like the rest. Until then, the paste step above is
+> the supported path — keep it to ~3 triggers and it stays trivial.

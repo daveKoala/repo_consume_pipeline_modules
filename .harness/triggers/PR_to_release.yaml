@@ -25,5 +25,6 @@ trigger:
             - Open
             - Reopen
             - Synchronize
+  pipelineBranchName: main
   inputSetRefs:
     - Build_daveKoala_repo_consume_pipeline_modules_1782394589089prtriggerinputset
