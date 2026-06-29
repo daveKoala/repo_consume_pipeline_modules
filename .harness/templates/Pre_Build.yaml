@@ -37,37 +37,49 @@ template:
                   echo "Branch: <+codebase.branch>"
                   echo "Commit SHA: <+codebase.commitSha>"
                   echo "Triggered by: <+trigger.triggeredBy.name>"
+          - step:
+              type: Run
+              name: Install Dependencies
+              identifier: Install_Dependencies
+              description: Composer install + app key for test run
+              spec:
+                shell: Sh
+                command: |-
+                  echo "pre-build - install dependencies"
+                  composer install --prefer-dist --no-interaction --no-progress --no-ansi
+                  cp -n .env.example .env || true
+                  php artisan key:generate --force
           - parallel:
               - step:
                   type: Run
                   name: Run Lint
                   identifier: Run_Lint
-                  description: Static analysis / lint (blocking)
+                  description: Laravel Pint lint check (blocking, no fix)
                   spec:
                     shell: Sh
                     command: |-
-                      echo "pre-build - lint"
-                      # TODO: replace with real lint command
+                      echo "pre-build - lint (pint)"
+                      ./vendor/bin/pint --test
               - step:
                   type: Run
                   name: Run Unit Tests
                   identifier: Run_UnitTests
-                  description: Unit tests (blocking)
+                  description: PHPUnit Unit testsuite (blocking)
                   spec:
                     shell: Sh
                     command: |-
                       echo "pre-build - unit tests"
-                      # TODO: replace with real unit test command
+                      php artisan test --testsuite=Unit
           - step:
               type: Run
-              name: Validate Config
-              identifier: Validate_Config
-              description: Config / schema validation (blocking)
+              name: Run Feature Tests
+              identifier: Run_FeatureTests
+              description: PHPUnit Feature testsuite (blocking)
               spec:
                 shell: Sh
                 command: |-
-                  echo "pre-build - validate config + manifests"
-                  # TODO: replace with real validation command
+                  echo "pre-build - feature tests"
+                  php artisan test --testsuite=Feature
           # ---- Quality & Security (3rd-party, toggleable) ----
           # Requires the consuming pipeline to declare sonarqube_mode +
           # phpstan_mode variables. 'off' skips; 'advisory' swallows failure.

@@ -24,32 +24,41 @@ template:
               type: Run
               name: Compile
               identifier: Compile
-              description: Compile / build application
+              description: Install prod dependencies + build front-end assets
               spec:
                 shell: Sh
                 command: |-
                   echo "build - compile application"
-                  # TODO: replace with real build command
+                  composer install --no-dev --optimize-autoloader --no-interaction --no-progress --no-ansi
+                  npm ci
+                  npm run build
           - step:
               type: Run
               name: Create Artefact
               identifier: Create_Artefact
               description: >-
-                Create build-info.txt + export contents (base64) as an output
-                variable so later stages (separate machines) can read it.
+                Build tag = yyyy-mm-dd_<sequenceId>. Writes build-info.txt +
+                exports tag and contents (base64) as output variables so later
+                stages (separate machines) can read them.
               spec:
                 shell: Sh
                 command: |-
                   echo "build - create artefact"
-                  echo "build - artefact version <+pipeline.sequenceId>"
+
+                  BUILD_DATE="$(date -u +%Y-%m-%d)"
+                  BUILD_TAG="${BUILD_DATE}_<+pipeline.sequenceId>"
+                  SHORT_SHA="$(echo '<+codebase.commitSha>' | cut -c1-7)"
+                  echo "build - artefact tag ${BUILD_TAG} (sha ${SHORT_SHA})"
 
                   cat > build-info.txt <<EOF
                   Service:      repo_consume_pipeline_modules
+                  Build Tag:    ${BUILD_TAG}
                   Build ID:     <+pipeline.sequenceId>
                   Execution ID: <+pipeline.executionId>
                   Repo:         <+codebase.repoName>
                   Branch:       <+codebase.branch>
                   Commit SHA:   <+codebase.commitSha>
+                  Short SHA:    ${SHORT_SHA}
                   Built At:     $(date -u +"%Y-%m-%dT%H:%M:%SZ")
                   EOF
 
@@ -57,6 +66,8 @@ template:
                   cat build-info.txt
                   echo "--------------------------"
 
+                  export BUILD_TAG="${BUILD_TAG}"
                   export BUILD_INFO_B64="$(base64 build-info.txt | tr -d '\n')"
               outputVariables:
+                - name: BUILD_TAG
                 - name: BUILD_INFO_B64
