@@ -44,7 +44,7 @@ template:
               description: Composer install + app key for test run
               spec:
                 shell: Sh
-                image: laravelsail/php83-composer:latest
+                image: laravelsail/php84-composer:latest
                 command: |-
                   echo "pre-build - install dependencies"
                   composer install --prefer-dist --no-interaction --no-progress --no-ansi
@@ -58,7 +58,7 @@ template:
                   description: Laravel Pint lint check (blocking, no fix)
                   spec:
                     shell: Sh
-                    image: laravelsail/php83-composer:latest
+                    image: laravelsail/php84-composer:latest
                     command: |-
                       echo "pre-build - lint (pint)"
                       ./vendor/bin/pint --test
@@ -69,7 +69,7 @@ template:
                   description: PHPUnit Unit testsuite (blocking)
                   spec:
                     shell: Sh
-                    image: laravelsail/php83-composer:latest
+                    image: laravelsail/php84-composer:latest
                     command: |-
                       echo "pre-build - unit tests"
                       php artisan test --testsuite=Unit
@@ -80,7 +80,7 @@ template:
               description: PHPUnit Feature testsuite (blocking)
               spec:
                 shell: Sh
-                image: laravelsail/php83-composer:latest
+                image: laravelsail/php84-composer:latest
                 command: |-
                   echo "pre-build - feature tests"
                   php artisan test --testsuite=Feature
