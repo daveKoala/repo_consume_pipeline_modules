@@ -27,6 +27,7 @@ template:
               description: Install prod dependencies + build front-end assets
               spec:
                 shell: Sh
+                image: laravelsail/php83-composer:latest
                 command: |-
                   echo "build - compile application"
                   composer install --no-dev --optimize-autoloader --no-interaction --no-progress --no-ansi
