@@ -24,14 +24,24 @@ template:
               type: Run
               name: Compile
               identifier: Compile
-              description: Install prod dependencies + build front-end assets
+              description: Install prod PHP dependencies
               spec:
                 shell: Sh
                 image: laravelsail/php84-composer:latest
                 command: |-
-                  echo "build - compile application"
+                  echo "build - compile application (php)"
                   composer install --no-dev --optimize-autoloader --no-interaction --no-progress --no-ansi
-                  npm ci
+          - step:
+              type: Run
+              name: Build Assets
+              identifier: Build_Assets
+              description: Build front-end assets (vite). No lockfile -> npm install.
+              spec:
+                shell: Sh
+                image: node:20-alpine
+                command: |-
+                  echo "build - front-end assets (node)"
+                  npm install --no-audit --no-fund
                   npm run build
           - step:
               type: Run
