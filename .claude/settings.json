@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd /Users/davidclare/CAVU/api-partners/.harness && find . -type f -newermt '2026-06-29 00:00' 2>/dev/null | sort || find . -type f | sort)",
+      "Read(//Users/davidclare/CAVU/api-partners/.harness/**)"
+    ],
+    "additionalDirectories": [
+      "/Users/davidclare/CAVU/api-partners/.harness/orgs/Engineering/projects/Partner_Service/pipelines"
+    ]
+  }
+}
